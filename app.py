@@ -6,8 +6,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from datetime import datetime
-from config import ConfiguracaoScraper
-from database import SupabaseManager
+from supabase import create_client
 
 class ScraperVivaReal:
     def configurar_navegador(self) -> webdriver.Chrome:
@@ -23,10 +22,69 @@ class ScraperVivaReal:
         opcoes_chrome.add_experimental_option('useAutomationExtension', False)
         return webdriver.Chrome(options=opcoes_chrome)
 
-    # [Resto dos métodos da classe permanecem iguais]
+    def __init__(self, url_base):
+        self.url_base = url_base
+        self.navegador = None
+        self.wait = None
+
+    def iniciar_navegador(self):
+        self.navegador = self.configurar_navegador()
+        self.wait = WebDriverWait(self.navegador, 10)
+
+    def fechar_navegador(self):
+        if self.navegador:
+            self.navegador.quit()
+
+    def coletar_dados(self, num_paginas=1):
+        try:
+            self.iniciar_navegador()
+            todos_imoveis = []
+
+            for pagina in range(1, num_paginas + 1):
+                url_pagina = f"{self.url_base}?pagina={pagina}"
+                self.navegador.get(url_pagina)
+                
+                # Aguarda o carregamento dos imóveis
+                self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, "property-card__content")))
+                
+                # Coleta dados dos imóveis
+                cards = self.navegador.find_elements(By.CLASS_NAME, "property-card__content")
+                
+                for card in cards:
+                    try:
+                        titulo = card.find_element(By.CLASS_NAME, "property-card__title").text
+                        area = card.find_element(By.CLASS_NAME, "property-card__detail-area").text
+                        preco = card.find_element(By.CLASS_NAME, "property-card__price").text
+                        
+                        imovel = {
+                            'titulo': titulo,
+                            'area': area,
+                            'preco': preco,
+                            'data_coleta': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                        
+                        todos_imoveis.append(imovel)
+                    except Exception as e:
+                        st.warning(f"Erro ao coletar dados de um imóvel: {e}")
+                        continue
+
+            return pd.DataFrame(todos_imoveis)
+        
+        except Exception as e:
+            st.error(f"Erro durante a coleta: {e}")
+            return None
+        
+        finally:
+            self.fechar_navegador()
 
 def main():
     st.title("Scraper VivaReal")
+    
+    # Inicializa o cliente Supabase
+    supabase = create_client(
+        st.secrets["supabase_url"],
+        st.secrets["supabase_key"]
+    )
     
     url = st.text_input(
         "Digite a URL do VivaReal:",
@@ -46,21 +104,20 @@ def main():
             return
             
         with st.spinner("Coletando dados..."):
-            config = ConfiguracaoScraper()
-            config.url_base = url
-            scraper = ScraperVivaReal(config)
+            scraper = ScraperVivaReal(url)
             df = scraper.coletar_dados(num_paginas=num_paginas)
             
             if df is not None:
                 try:
-                    db = SupabaseManager()
-                    st.info("Limpando tabela existente...")
-                    db.limpar_tabela()
-                    st.info("Inserindo novos dados...")
-                    db.inserir_dados(df)
+                    # Limpa tabela existente
+                    supabase.table("imoveis").delete().neq('id', 0).execute()
+                    
+                    # Insere novos dados
+                    registros = df.to_dict('records')
+                    supabase.table("imoveis").insert(registros).execute()
                     st.success("Dados salvos no Supabase com sucesso!")
                     
-                    # Gerar arquivo Excel para download
+                    # Gera arquivo Excel para download
                     nome_arquivo = f"lotes_eusebio_vivareal_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
                     df.to_excel(nome_arquivo, index=False)
                     
@@ -71,8 +128,8 @@ def main():
                             file_name=nome_arquivo,
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
-                        
-                    # Mostrar preview dos dados
+                    
+                    # Mostra preview dos dados
                     st.dataframe(df.head())
                     
                 except Exception as e:
