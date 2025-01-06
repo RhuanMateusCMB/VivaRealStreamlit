@@ -58,13 +58,11 @@ class ScraperVivaReal:
         opcoes_chrome.add_argument('--window-size=1920,1080')
         opcoes_chrome.add_argument(f'user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         opcoes_chrome.add_argument('--disable-blink-features=AutomationControlled')
-        opcoes_chrome.add_experimental_option('excludeSwitches', ['enable-automation'])
-        opcoes_chrome.add_experimental_option('useAutomationExtension', False)
         opcoes_chrome.add_argument('--enable-cookies')
         opcoes_chrome.add_argument('--disable-web-security')
         
-        service = Service(ChromeDriverManager().install())
-        navegador = webdriver.Chrome(service=service, options=opcoes_chrome)
+        opcoes_chrome.binary_location = "/usr/bin/chromium-browser"
+        navegador = webdriver.Chrome(options=opcoes_chrome)
         navegador.execute_cdp_cmd('Network.setUserAgentOverride', {"userAgent": 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
         navegador.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         
