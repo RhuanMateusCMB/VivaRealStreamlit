@@ -26,7 +26,8 @@ class SupabaseManager:
     def __init__(self):
         self.url = st.secrets["SUPABASE_URL"]
         self.key = st.secrets["SUPABASE_KEY"]
-        self.supabase = create_client(self.url, self.key)
+        options = {'headers': {'Authorization': f'Bearer {self.key}'}}
+        self.supabase = create_client(self.url, self.key, options=options)
 
     def limpar_tabela(self):
         self.supabase.table('imoveis').delete().neq('id', 0).execute()
