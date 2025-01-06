@@ -1,0 +1,7 @@
+streamlit
+pandas
+selenium
+openpyxl
+python-dotenv
+supabase
+webdriver-manager
