@@ -50,19 +50,22 @@ class SupabaseManager:
         self.supabase = create_client(self.url, self.key)
 
     def limpar_tabela(self):
-        self.supabase.table('imoveis').delete().neq('id', 0).execute()
+        self.supabase.table('imoveisatual').delete().neq('id', 0).execute()
 
     def inserir_dados(self, df):
         # Primeiro, pegamos o maior ID atual na tabela
-        result = self.supabase.table('imoveis').select('id').order('id.desc').limit(1).execute()
+        result = self.supabase.table('imoveisatual').select('id').order('id.desc').limit(1).execute()
         ultimo_id = result.data[0]['id'] if result.data else 0
         
         # Ajustamos os IDs do novo dataframe
         df['id'] = df['id'].apply(lambda x: x + ultimo_id)
         
+        # Convertemos a coluna data_coleta para o formato correto
+        df['data_coleta'] = pd.to_datetime(df['data_coleta']).dt.strftime('%Y-%m-%d')
+        
         # Agora inserimos os dados
         registros = df.to_dict('records')
-        self.supabase.table('imoveis').insert(registros).execute()
+        self.supabase.table('imoveisatual').insert(registros).execute()
 
 class ScraperVivaReal:
     def __init__(self, config: ConfiguracaoScraper):
@@ -322,14 +325,23 @@ def main():
                         use_container_width=True
                     )
                     
-                    # Salvamento no banco
-                    try:
-                        with st.spinner("💾 Salvando dados no banco..."):
-                            db = SupabaseManager()
-                            db.inserir_dados(df)
-                            st.success("✅ Dados salvos no banco de dados!")
-                    except Exception as e:
-                        st.error(f"❌ Erro ao salvar no banco de dados: {str(e)}")
+                    # Confirmação para salvar no banco
+                    st.markdown("### 💾 Salvar no Banco de Dados")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.button("✅ Sim, salvar dados", use_container_width=True):
+                            try:
+                                with st.spinner("💾 Salvando dados no banco..."):
+                                    db = SupabaseManager()
+                                    db.inserir_dados(df)
+                                    st.success("✅ Dados salvos no banco de dados!")
+                            except Exception as e:
+                                st.error(f"❌ Erro ao salvar no banco de dados: {str(e)}")
+                    
+                    with col2:
+                        if st.button("❌ Não salvar", use_container_width=True):
+                            st.info("📝 Dados não foram salvos no banco.")
                     
                     # Botão de download
                     csv = df.to_csv(index=False).encode('utf-8-sig')
