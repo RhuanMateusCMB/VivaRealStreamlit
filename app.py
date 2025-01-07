@@ -270,6 +270,12 @@ class ScraperVivaReal:
 
 def main():
     try:
+        # Inicializar session_state
+        if 'df' not in st.session_state:
+            st.session_state.df = None
+        if 'dados_salvos' not in st.session_state:
+            st.session_state.dados_salvos = False
+            
         # Títulos e descrição
         st.title("🏗️ Scraper VivaReal - Terrenos em Eusébio")
         
@@ -294,68 +300,75 @@ def main():
         
         # Botão centralizado
         if st.button("🚀 Iniciar Coleta", type="primary", use_container_width=True):
+            st.session_state.dados_salvos = False  # Reset estado de salvamento
             with st.spinner("Iniciando coleta de dados..."):
                 config = ConfiguracaoScraper()
                 scraper = ScraperVivaReal(config)
                 
-                df = scraper.coletar_dados()
+                st.session_state.df = scraper.coletar_dados()
                 
-                if df is not None and not df.empty:
-                    # Métricas principais
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Total de Imóveis", len(df))
-                    with col2:
-                        preco_medio = df['preco_real'].mean()
-                        st.metric("Preço Médio", f"R$ {preco_medio:,.2f}")
-                    with col3:
-                        area_media = df['area_m2'].mean()
-                        st.metric("Área Média", f"{area_media:,.2f} m²")
-                    
-                    st.success("✅ Dados coletados com sucesso!")
-                    
-                    # Exibição dos dados
-                    st.markdown("### 📊 Dados Coletados")
-                    st.dataframe(
-                        df.style.format({
-                            'preco_real': 'R$ {:,.2f}',
-                            'preco_m2': 'R$ {:,.2f}',
-                            'area_m2': '{:,.2f} m²'
-                        }),
-                        use_container_width=True
-                    )
-                    
-                    # Confirmação para salvar no banco
-                    st.markdown("### 💾 Salvar no Banco de Dados")
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        if st.button("✅ Sim, salvar dados", use_container_width=True):
-                            try:
-                                with st.spinner("💾 Salvando dados no banco..."):
-                                    db = SupabaseManager()
-                                    db.inserir_dados(df)
-                                    st.success("✅ Dados salvos no banco de dados!")
-                            except Exception as e:
-                                st.error(f"❌ Erro ao salvar no banco de dados: {str(e)}")
-                    
-                    with col2:
-                        if st.button("❌ Não salvar", use_container_width=True):
-                            st.info("📝 Dados não foram salvos no banco.")
-                    
-                    # Botão de download
-                    csv = df.to_csv(index=False).encode('utf-8-sig')
-                    st.download_button(
-                        label="📥 Baixar dados em CSV",
-                        data=csv,
-                        file_name=f'terrenos_eusebio_{datetime.now().strftime("%Y%m%d")}.csv',
-                        mime='text/csv',
-                    )
-                    
-                    st.info("🔄 Para iniciar uma nova coleta, atualize a página.")
-                else:
-                    st.error("❌ Não foi possível coletar dados. Verifique se o site está acessível.")
-        
+        # Se temos dados coletados
+        if st.session_state.df is not None and not st.session_state.df.empty:
+            df = st.session_state.df  # Para facilitar a referência
+            
+            # Métricas principais
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total de Imóveis", len(df))
+            with col2:
+                preco_medio = df['preco_real'].mean()
+                st.metric("Preço Médio", f"R$ {preco_medio:,.2f}")
+            with col3:
+                area_media = df['area_m2'].mean()
+                st.metric("Área Média", f"{area_media:,.2f} m²")
+            
+            st.success("✅ Dados coletados com sucesso!")
+            
+            # Exibição dos dados
+            st.markdown("### 📊 Dados Coletados")
+            st.dataframe(
+                df.style.format({
+                    'preco_real': 'R$ {:,.2f}',
+                    'preco_m2': 'R$ {:,.2f}',
+                    'area_m2': '{:,.2f} m²'
+                }),
+                use_container_width=True
+            )
+            
+            # Confirmação para salvar no banco
+            if not st.session_state.dados_salvos:
+                st.markdown("### 💾 Salvar no Banco de Dados")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("✅ Sim, salvar dados", key='save_button', use_container_width=True):
+                        try:
+                            with st.spinner("💾 Salvando dados no banco..."):
+                                db = SupabaseManager()
+                                db.inserir_dados(df)
+                                st.session_state.dados_salvos = True
+                                st.success("✅ Dados salvos no banco de dados!")
+                                st.balloons()
+                        except Exception as e:
+                            st.error(f"❌ Erro ao salvar no banco de dados: {str(e)}")
+                
+                with col2:
+                    if st.button("❌ Não salvar", key='dont_save_button', use_container_width=True):
+                        st.session_state.dados_salvos = True
+                        st.info("📝 Dados não foram salvos no banco.")
+            
+            # Botão de download
+            csv = df.to_csv(index=False).encode('utf-8-sig')
+            st.download_button(
+                label="📥 Baixar dados em CSV",
+                data=csv,
+                file_name=f'terrenos_eusebio_{datetime.now().strftime("%Y%m%d")}.csv',
+                mime='text/csv',
+            )
+            
+            if st.session_state.dados_salvos:
+                st.info("🔄 Para iniciar uma nova coleta, atualize a página.")
+                
         # Rodapé
         st.markdown("<hr>", unsafe_allow_html=True)
         st.markdown("""
