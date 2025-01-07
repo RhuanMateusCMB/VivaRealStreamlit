@@ -292,7 +292,7 @@ def main():
         ℹ️ **Informações sobre a coleta:**
         - Serão coletadas 10 páginas de resultados
         - Apenas terrenos em Eusébio/CE
-        - Os dados são salvos automaticamente no banco de dados
+        - Após a coleta, você pode escolher se deseja salvar os dados no banco
         """)
         
         # Separador visual
