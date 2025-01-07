@@ -32,6 +32,14 @@ class SupabaseManager:
         self.supabase.table('imoveis').delete().neq('id', 0).execute()
 
     def inserir_dados(self, df):
+        # Primeiro, pegamos o maior ID atual na tabela
+        result = self.supabase.table('imoveis').select('id').order('id.desc').limit(1).execute()
+        ultimo_id = result.data[0]['id'] if result.data else 0
+        
+        # Ajustamos os IDs do novo dataframe
+        df['id'] = df['id'].apply(lambda x: x + ultimo_id)
+        
+        # Agora inserimos os dados
         registros = df.to_dict('records')
         self.supabase.table('imoveis').insert(registros).execute()
 
