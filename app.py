@@ -255,7 +255,7 @@ def main():
                     st.success("Dados coletados com sucesso!")
                     st.dataframe(df)
                     
-                                            try:
+                    try:
                         db = SupabaseManager()
                         status_text.text("Inserindo novos dados...")
                         db.inserir_dados(df)
