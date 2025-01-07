@@ -6,7 +6,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+# Removed webdriver_manager import
 import time
 from datetime import datetime
 import logging
@@ -255,10 +255,8 @@ def main():
                     st.success("Dados coletados com sucesso!")
                     st.dataframe(df)
                     
-                    try:
+                                            try:
                         db = SupabaseManager()
-                        status_text.text("Limpando tabela existente...")
-                        db.limpar_tabela()
                         status_text.text("Inserindo novos dados...")
                         db.inserir_dados(df)
                         st.success("Dados salvos no Supabase!")
