@@ -15,7 +15,7 @@ from supabase import create_client
 
 # Configuração da página Streamlit
 st.set_page_config(
-    page_title="Coleta Informações Gerais Terrenos - Eusebio, CE",
+    page_title="CMB - Capital",
     page_icon="🏗️",
     layout="wide"
 )
@@ -277,7 +277,7 @@ def main():
             st.session_state.dados_salvos = False
             
         # Títulos e descrição
-        st.title("🏗️ Scraper VivaReal - Terrenos em Eusébio")
+        st.title("🏗️ Coleta Informações Gerais Terrenos - Eusebio, CE")
         
         st.markdown("""
         <div style='text-align: center; padding: 1rem 0;'>
