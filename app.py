@@ -282,7 +282,7 @@ def main():
         st.markdown("""
         <div style='text-align: center; padding: 1rem 0;'>
             <p style='font-size: 1.2em; color: #666;'>
-                Coleta automática de dados de terrenos à venda em Eusébio, Ceará
+                Coleta de dados de terrenos à venda em Eusébio, Ceará
             </p>
         </div>
         """, unsafe_allow_html=True)
