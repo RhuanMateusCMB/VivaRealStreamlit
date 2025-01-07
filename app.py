@@ -268,6 +268,7 @@ def main():
                         status_text.text("Inserindo novos dados...")
                         db.inserir_dados(df)
                         st.success("Dados salvos no Supabase!")
+                        st.info("✨ Para iniciar uma nova coleta, atualize a página. ✨")
                     except Exception as e:
                         st.error(f"Erro ao salvar no Supabase: {str(e)}")
                 else:
