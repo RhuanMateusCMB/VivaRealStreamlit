@@ -1,4 +1,4 @@
-streamlit==1.31.0
+streamlit==1.41.1
 selenium==4.15.2
 pandas==2.1.4
 supabase==1.2.0
