@@ -6,7 +6,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-# Removed webdriver_manager import
 import time
 from datetime import datetime
 import logging
@@ -14,18 +13,40 @@ from typing import Optional, List, Dict
 from dataclasses import dataclass
 from supabase import create_client
 
+# Configuração da página Streamlit
+st.set_page_config(
+    page_title="Scraper VivaReal - Terrenos em Eusébio",
+    page_icon="🏗️",
+    layout="wide"
+)
+
+# Estilo CSS personalizado
+st.markdown("""
+    <style>
+    .stButton>button {
+        width: 100%;
+        height: 3em;
+        font-size: 20px;
+    }
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 @dataclass
 class ConfiguracaoScraper:
     tempo_espera: int = 20
     pausa_rolagem: int = 3
     espera_carregamento: int = 5
-    url_base: str = ""
+    url_base: str = "https://www.vivareal.com.br/venda/ceara/eusebio/lote-terreno_residencial/#onde=,Cear%C3%A1,Eus%C3%A9bio,,,,,city,BR%3ECeara%3ENULL%3EEusebio,-14.791623,-39.283324,&itl_id=1000183&itl_name=vivareal_-_botao-cta_buscar_to_vivareal_resultado-pesquisa"
     tentativas_max: int = 3
 
 class SupabaseManager:
     def __init__(self):
-        self.url = st.secrets["SUPABASE_URL"]
-        self.key = st.secrets["SUPABASE_KEY"]
+        self.url = "https://iihispflbomkfnceyifo.supabase.co"
+        self.key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpaGlzcGZsYm9ta2ZuY2V5aWZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzM0MjkwNDksImV4cCI6MjA0OTAwNTA0OX0.kr5BTB_9cr4WV2Cdcd60By4j40CquMdjByT0icl3CY0"
         self.supabase = create_client(self.url, self.key)
 
     def limpar_tabela(self):
@@ -57,6 +78,9 @@ class ScraperVivaReal:
         return logging.getLogger(__name__)
 
     def _configurar_navegador(self) -> webdriver.Chrome:
+        from selenium.webdriver.chrome.service import Service as ChromeService
+        from webdriver_manager.chrome import ChromeDriverManager
+        
         opcoes_chrome = Options()
         opcoes_chrome.add_argument('--headless=new')
         opcoes_chrome.add_argument('--no-sandbox')
@@ -65,11 +89,17 @@ class ScraperVivaReal:
         opcoes_chrome.add_argument('--window-size=1920,1080')
         opcoes_chrome.add_argument('--disable-blink-features=AutomationControlled')
         opcoes_chrome.add_argument('--enable-cookies')
-        opcoes_chrome.binary_location = "/usr/bin/chromium"
         
-        service = Service("/usr/bin/chromedriver")
+        # Removendo a configuração específica do Chromium
+        # opcoes_chrome.binary_location = "/usr/bin/chromium"
+        
+        # Usando ChromeDriverManager para gerenciar o driver automaticamente
+        service = ChromeService(ChromeDriverManager().install())
+        
         navegador = webdriver.Chrome(service=service, options=opcoes_chrome)
-        navegador.execute_cdp_cmd('Network.setUserAgentOverride', {"userAgent": 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+        navegador.execute_cdp_cmd('Network.setUserAgentOverride', {
+            "userAgent": 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        })
         navegador.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         
         return navegador
@@ -175,7 +205,7 @@ class ScraperVivaReal:
                 continue
         return None
 
-    def coletar_dados(self, num_paginas: int = 5) -> Optional[pd.DataFrame]:
+    def coletar_dados(self, num_paginas: int = 10) -> Optional[pd.DataFrame]:
         todos_dados: List[Dict] = []
         id_global = 0
         progresso = st.progress(0)
@@ -193,7 +223,7 @@ class ScraperVivaReal:
 
             for pagina in range(1, num_paginas + 1):
                 try:
-                    status.text(f"Processando página {pagina}/{num_paginas}")
+                    status.text(f"⏳ Processando página {pagina}/{num_paginas}")
                     progresso.progress(pagina / num_paginas)
                     
                     time.sleep(self.config.espera_carregamento)
@@ -233,48 +263,96 @@ class ScraperVivaReal:
             navegador.quit()
 
 def main():
-    st.title("Scraper VivaReal")
-    
-    url = st.text_input(
-        "URL do VivaReal",
-        placeholder="https://www.vivareal.com.br/..."
-    )
-
-    num_paginas = st.slider(
-        "Número de páginas para coletar",
-        min_value=1,
-        max_value=34,
-        value=5
-    )
-
-    if st.button("Iniciar Coleta"):
-        if not url.startswith("https://www.vivareal.com.br/"):
-            st.error("URL inválida. A URL deve começar com 'https://www.vivareal.com.br/'")
-        else:
-            status_text = st.empty()
-            
-            config = ConfiguracaoScraper()
-            config.url_base = url
-            scraper = ScraperVivaReal(config)
-            
-            try:
-                df = scraper.coletar_dados(num_paginas=num_paginas)
-                if df is not None:
-                    st.success("Dados coletados com sucesso!")
-                    st.dataframe(df)
+    try:
+        # Títulos e descrição
+        st.title("🏗️ Scraper VivaReal - Terrenos em Eusébio")
+        
+        st.markdown("""
+        <div style='text-align: center; padding: 1rem 0;'>
+            <p style='font-size: 1.2em; color: #666;'>
+                Coleta automática de dados de terrenos à venda em Eusébio, Ceará
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Informações sobre a coleta
+        st.info("""
+        ℹ️ **Informações sobre a coleta:**
+        - Serão coletadas 10 páginas de resultados
+        - Apenas terrenos em Eusébio/CE
+        - Os dados são salvos automaticamente no banco de dados
+        """)
+        
+        # Separador visual
+        st.markdown("<hr>", unsafe_allow_html=True)
+        
+        # Botão centralizado
+        if st.button("🚀 Iniciar Coleta", type="primary", use_container_width=True):
+            with st.spinner("Iniciando coleta de dados..."):
+                config = ConfiguracaoScraper()
+                scraper = ScraperVivaReal(config)
+                
+                df = scraper.coletar_dados()
+                
+                if df is not None and not df.empty:
+                    # Métricas principais
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Total de Imóveis", len(df))
+                    with col2:
+                        preco_medio = df['preco_real'].mean()
+                        st.metric("Preço Médio", f"R$ {preco_medio:,.2f}")
+                    with col3:
+                        area_media = df['area_m2'].mean()
+                        st.metric("Área Média", f"{area_media:,.2f} m²")
                     
+                    st.success("✅ Dados coletados com sucesso!")
+                    
+                    # Exibição dos dados
+                    st.markdown("### 📊 Dados Coletados")
+                    st.dataframe(
+                        df.style.format({
+                            'preco_real': 'R$ {:,.2f}',
+                            'preco_m2': 'R$ {:,.2f}',
+                            'area_m2': '{:,.2f} m²'
+                        }),
+                        use_container_width=True
+                    )
+                    
+                    # Salvamento no banco
                     try:
-                        db = SupabaseManager()
-                        status_text.text("Inserindo novos dados...")
-                        db.inserir_dados(df)
-                        st.success("Dados salvos no Supabase!")
-                        st.info("✨ Para iniciar uma nova coleta, atualize a página. ✨")
+                        with st.spinner("💾 Salvando dados no banco..."):
+                            db = SupabaseManager()
+                            db.inserir_dados(df)
+                            st.success("✅ Dados salvos no banco de dados!")
                     except Exception as e:
-                        st.error(f"Erro ao salvar no Supabase: {str(e)}")
+                        st.error(f"❌ Erro ao salvar no banco de dados: {str(e)}")
+                    
+                    # Botão de download
+                    csv = df.to_csv(index=False).encode('utf-8-sig')
+                    st.download_button(
+                        label="📥 Baixar dados em CSV",
+                        data=csv,
+                        file_name=f'terrenos_eusebio_{datetime.now().strftime("%Y%m%d")}.csv',
+                        mime='text/csv',
+                    )
+                    
+                    st.info("🔄 Para iniciar uma nova coleta, atualize a página.")
                 else:
-                    st.error("Falha na coleta de dados")
-            except Exception as e:
-                st.error(f"Erro durante a execução: {str(e)}")
+                    st.error("❌ Não foi possível coletar dados. Verifique se o site está acessível.")
+        
+        # Rodapé
+        st.markdown("<hr>", unsafe_allow_html=True)
+        st.markdown("""
+            <div style='text-align: center; padding: 1rem 0; color: #666;'>
+                <p>Desenvolvido com ❤️ por Rhuan Mateus - CMB Capital</p>
+                <p style='font-size: 0.8em;'>Última atualização: Janeiro 2025</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    except Exception as e:
+        st.error(f"❌ Erro inesperado: {str(e)}")
+        st.error("Por favor, atualize a página e tente novamente.")
 
 if __name__ == "__main__":
     main()
