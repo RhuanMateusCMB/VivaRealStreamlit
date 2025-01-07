@@ -1,16 +1,25 @@
+# Bibliotecas para interface web
 import streamlit as st
+
+# Bibliotecas para manipulação de dados
 import pandas as pd
+
+# Bibliotecas Selenium para web scraping
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+
+# Bibliotecas utilitárias
 import time
 from datetime import datetime
 import logging
 from typing import Optional, List, Dict
 from dataclasses import dataclass
+
+# Biblioteca para conexão com Supabase
 from supabase import create_client
 
 # Configuração da página Streamlit
@@ -37,9 +46,9 @@ st.markdown("""
 
 @dataclass
 class ConfiguracaoScraper:
-    tempo_espera: int = 20
-    pausa_rolagem: int = 3
-    espera_carregamento: int = 5
+    tempo_espera: int = 30  # Aumentar de 20 para 30
+    pausa_rolagem: int = 5  # Aumentar de 3 para 5
+    espera_carregamento: int = 10  # Aumentar de 5 para 10
     url_base: str = "https://www.vivareal.com.br/venda/ceara/eusebio/lote-terreno_residencial/#onde=,Cear%C3%A1,Eus%C3%A9bio,,,,,city,BR%3ECeara%3ENULL%3EEusebio,-14.791623,-39.283324,&itl_id=1000183&itl_name=vivareal_-_botao-cta_buscar_to_vivareal_resultado-pesquisa"
     tentativas_max: int = 3
 
@@ -144,45 +153,120 @@ class ScraperVivaReal:
             time.sleep(self.config.pausa_rolagem)
 
     def _extrair_dados_imovel(self, imovel: webdriver.remote.webelement.WebElement,
-                    id_global: int, pagina: int) -> Optional[Dict]:
-        try:
-            preco_texto = imovel.find_element(By.CSS_SELECTOR, 'div.property-card__price').text
-            area_texto = imovel.find_element(By.CSS_SELECTOR, 'span.property-card__detail-area').text
+                         id_global: int, pagina: int) -> Optional[Dict]:
+        for tentativa in range(3):  # 3 tentativas para cada imóvel
+            try:
+                # Funções auxiliares para conversão
+                def converter_preco(texto: str) -> float:
+                    try:
+                        numero = texto.replace('R$', '').replace('.', '').replace(',', '.').strip()
+                        return float(numero)
+                    except (ValueError, AttributeError):
+                        self.logger.warning(f"Erro ao converter preço: {texto}")
+                        return 0.0
 
-            def converter_preco(texto: str) -> float:
-                numero = texto.replace('R$', '').replace('.', '').replace(',', '.').strip()
+                def converter_area(texto: str) -> float:
+                    try:
+                        numero = texto.replace('m²', '').replace(',', '.').strip()
+                        return float(numero)
+                    except (ValueError, AttributeError):
+                        self.logger.warning(f"Erro ao converter área: {texto}")
+                        return 0.0
+
+                # Aguardar elementos específicos com timeout individual
+                wait = WebDriverWait(imovel, 10)
+                
+                # Extrair preço com retry
                 try:
-                    return float(numero)
-                except ValueError:
-                    return 0.0
+                    preco_elemento = wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'div.property-card__price'))
+                    )
+                    preco_texto = preco_elemento.text
+                except Exception as e:
+                    self.logger.warning(f"Erro ao extrair preço na tentativa {tentativa + 1}: {e}")
+                    time.sleep(2)
+                    continue
 
-            def converter_area(texto: str) -> float:
-                numero = texto.replace('m²', '').replace(',', '.').strip()
+                # Extrair área com retry
                 try:
-                    return float(numero)
-                except ValueError:
-                    return 0.0
+                    area_elemento = wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'span.property-card__detail-area'))
+                    )
+                    area_texto = area_elemento.text
+                except Exception as e:
+                    self.logger.warning(f"Erro ao extrair área na tentativa {tentativa + 1}: {e}")
+                    time.sleep(2)
+                    continue
 
-            preco = converter_preco(preco_texto)
-            area = converter_area(area_texto)
-            preco_m2 = round(preco / area, 2) if area > 0 else 0.0
+                # Converter valores
+                preco = converter_preco(preco_texto)
+                area = converter_area(area_texto)
+                
+                # Calcular preço por m² com validação
+                if area > 0:
+                    preco_m2 = round(preco / area, 2)
+                else:
+                    preco_m2 = 0.0
+                    self.logger.warning(f"Área zero encontrada para imóvel ID {id_global}")
 
-            return {
-                'id': id_global,
-                'titulo': imovel.find_element(By.CSS_SELECTOR, 'span.property-card__title').text,
-                'endereco': imovel.find_element(By.CSS_SELECTOR, 'span.property-card__address').text,
-                'area_m2': area,
-                'preco_real': preco,
-                'preco_m2': preco_m2,
-                'link': imovel.find_element(By.CSS_SELECTOR, 'a.property-card__content-link').get_attribute('href'),
-                'pagina': pagina,
-                'data_coleta': datetime.now().strftime("%Y-%m-%d"),
-                'estado': '',
-                'localidade': ''
-            }
-        except Exception as e:
-            self.logger.error(f"Erro ao extrair dados: {str(e)}")
-            return None
+                # Extrair outros dados com tratamento de erro
+                try:
+                    titulo = wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'span.property-card__title'))
+                    ).text
+                except Exception:
+                    titulo = "Título não disponível"
+                    self.logger.warning(f"Título não encontrado para imóvel ID {id_global}")
+
+                try:
+                    endereco = wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'span.property-card__address'))
+                    ).text
+                except Exception:
+                    endereco = "Endereço não disponível"
+                    self.logger.warning(f"Endereço não encontrado para imóvel ID {id_global}")
+
+                try:
+                    link = wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'a.property-card__content-link'))
+                    ).get_attribute('href')
+                except Exception:
+                    link = ""
+                    self.logger.warning(f"Link não encontrado para imóvel ID {id_global}")
+
+                # Montar dicionário de dados
+                dados = {
+                    'id': id_global,
+                    'titulo': titulo,
+                    'endereco': endereco,
+                    'area_m2': area,
+                    'preco_real': preco,
+                    'preco_m2': preco_m2,
+                    'link': link,
+                    'pagina': pagina,
+                    'data_coleta': datetime.now().strftime("%Y-%m-%d"),
+                    'estado': '',
+                    'localidade': ''
+                }
+
+                # Validar dados críticos
+                if preco == 0 or area == 0:
+                    self.logger.warning(f"Dados incompletos para imóvel ID {id_global}: Preço={preco}, Área={area}")
+                    if tentativa < 2:  # Se não for a última tentativa
+                        time.sleep(2)
+                        continue
+
+                return dados
+
+            except Exception as e:
+                self.logger.error(f"Erro ao extrair dados do imóvel na tentativa {tentativa + 1}: {str(e)}")
+                if tentativa < 2:  # Se não for a última tentativa
+                    time.sleep(2)
+                    continue
+                return None
+
+        self.logger.error(f"Falha em todas as tentativas de extrair dados do imóvel ID {id_global}")
+        return None
 
     def _encontrar_botao_proxima(self, espera: WebDriverWait) -> Optional[webdriver.remote.webelement.WebElement]:
         seletores = [
@@ -198,7 +282,7 @@ class ScraperVivaReal:
                 continue
         return None
 
-    def coletar_dados(self, num_paginas: int = 5) -> Optional[pd.DataFrame]:
+    def coletar_dados(self, num_paginas: int = 10) -> Optional[pd.DataFrame]:
         navegador = None
         todos_dados: List[Dict] = []
         id_global = 0
@@ -290,7 +374,7 @@ def main():
         # Informações sobre a coleta
         st.info("""
         ℹ️ **Informações sobre a coleta:**
-        - Serão coletadas 5 páginas de resultados
+        - Serão coletadas 10 páginas de resultados
         - Apenas terrenos em Eusébio/CE
         - Após a coleta, você pode escolher se deseja salvar os dados no banco
         """)
