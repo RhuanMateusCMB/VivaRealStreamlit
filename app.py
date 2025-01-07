@@ -28,6 +28,9 @@ class SupabaseManager:
         self.key = st.secrets["SUPABASE_KEY"]
         self.supabase = create_client(self.url, self.key)
 
+    def limpar_tabela(self):
+        self.supabase.table('imoveis').delete().neq('id', 0).execute()
+
     def inserir_dados(self, df):
         registros = df.to_dict('records')
         self.supabase.table('imoveis').insert(registros).execute()
