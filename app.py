@@ -45,8 +45,8 @@ class ConfiguracaoScraper:
 
 class SupabaseManager:
     def __init__(self):
-        self.url = "https://iihispflbomkfnceyifo.supabase.co"
-        self.key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpaGlzcGZsYm9ta2ZuY2V5aWZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzM0MjkwNDksImV4cCI6MjA0OTAwNTA0OX0.kr5BTB_9cr4WV2Cdcd60By4j40CquMdjByT0icl3CY0"
+        self.url = st.secrets["SUPABASE_URL"]
+        self.key = st.secrets["SUPABASE_KEY"]
         self.supabase = create_client(self.url, self.key)
 
     def limpar_tabela(self):
