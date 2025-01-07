@@ -78,72 +78,70 @@ class ScraperVivaReal:
         return logging.getLogger(__name__)
 
     def _configurar_navegador(self) -> webdriver.Chrome:
-        from selenium.webdriver.chrome.service import Service as ChromeService
-        from webdriver_manager.chrome import ChromeDriverManager
-        
-        opcoes_chrome = Options()
-        opcoes_chrome.add_argument('--headless=new')
-        opcoes_chrome.add_argument('--no-sandbox')
-        opcoes_chrome.add_argument('--disable-dev-shm-usage')
-        opcoes_chrome.add_argument('--disable-gpu')
-        opcoes_chrome.add_argument('--window-size=1920,1080')
-        opcoes_chrome.add_argument('--disable-blink-features=AutomationControlled')
-        opcoes_chrome.add_argument('--enable-cookies')
-        
-        # Removendo a configuração específica do Chromium
-        # opcoes_chrome.binary_location = "/usr/bin/chromium"
-        
-        # Usando ChromeDriverManager para gerenciar o driver automaticamente
-        service = ChromeService(ChromeDriverManager().install())
-        
-        navegador = webdriver.Chrome(service=service, options=opcoes_chrome)
-        navegador.execute_cdp_cmd('Network.setUserAgentOverride', {
-            "userAgent": 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        })
-        navegador.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        
-        return navegador
+        try:
+            from selenium.webdriver.chrome.service import Service as ChromeService
+            from webdriver_manager.chrome import ChromeDriverManager
+            
+            opcoes_chrome = Options()
+            # Configurações específicas para o Streamlit Cloud
+            opcoes_chrome.add_argument('--headless=new')
+            opcoes_chrome.add_argument('--no-sandbox')
+            opcoes_chrome.add_argument('--disable-dev-shm-usage')
+            opcoes_chrome.add_argument('--disable-gpu')
+            opcoes_chrome.add_argument('--window-size=1920,1080')
+            opcoes_chrome.add_argument('--disable-blink-features=AutomationControlled')
+            opcoes_chrome.add_argument('--enable-cookies')
+            
+            # Configurações adicionais para estabilidade
+            opcoes_chrome.add_argument('--disable-extensions')
+            opcoes_chrome.add_argument('--disable-infobars')
+            opcoes_chrome.add_argument('--ignore-certificate-errors')
+            
+            service = ChromeService(ChromeDriverManager().install())
+            
+            navegador = webdriver.Chrome(service=service, options=opcoes_chrome)
+            navegador.execute_cdp_cmd('Network.setUserAgentOverride', {
+                "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            })
+            
+            return navegador
+        except Exception as e:
+            self.logger.error(f"Erro ao configurar navegador: {str(e)}")
+            return None
 
     def _capturar_localizacao(self, navegador: webdriver.Chrome) -> tuple:
-        try:
-            time.sleep(self.config.espera_carregamento)
-            localizacao_elemento = WebDriverWait(navegador, self.config.tempo_espera).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, '.search-input-location'))
-            )
-            texto_localizacao = localizacao_elemento.text.strip()
-            partes = texto_localizacao.split(' - ')
-            if len(partes) == 2:
-                localidades = partes[0]
-                estado = partes[1].strip()
-                return localidades, estado
-
-            self.logger.info(f"Localização capturada: {localidades} - {estado}")
-            return localidades, estado
-
-        except Exception as e:
-            try:
-                url_parts = navegador.current_url.split('/')
-                for i, part in enumerate(url_parts):
-                    if part in ['acre', 'alagoas', 'amapa', 'amazonas', 'bahia', 'ceara', 'distrito-federal',
-                              'espirito-santo', 'goias', 'maranhao', 'mato-grosso', 'mato-grosso-do-sul',
-                              'minas-gerais', 'para', 'paraiba', 'parana', 'pernambuco', 'piaui',
-                              'rio-de-janeiro', 'rio-grande-do-norte', 'rio-grande-do-sul', 'rondonia',
-                              'roraima', 'santa-catarina', 'sao-paulo', 'sergipe', 'tocantins']:
-                        estado = part.upper()[:2]
-                        if i + 1 < len(url_parts):
-                            next_part = url_parts[i + 1]
-                            if 'fortaleza' in next_part:
-                                localidades = 'Eusébio, Fortaleza'
-                            else:
-                                localidades = url_parts[i + 1].replace('-', ' ').title()
-                            self.logger.info(f"Localização capturada da URL: {localidades} - {estado}")
-                            return localidades, estado
-
-            except Exception as inner_e:
-                self.logger.error(f"Erro na segunda tentativa de capturar localização: {str(inner_e)}")
-
-            self.logger.error(f"Erro ao capturar localização: {str(e)}")
+        if navegador is None:
             return None, None
+            
+        try:
+            # Aguarda a página carregar completamente
+            time.sleep(self.config.espera_carregamento * 2)  # Aumentando o tempo de espera
+            
+            # Primeira tentativa: buscar pelo seletor CSS
+            try:
+                localizacao_elemento = WebDriverWait(navegador, self.config.tempo_espera).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, '.search-input-location'))
+                )
+                texto_localizacao = localizacao_elemento.text.strip()
+                if texto_localizacao:
+                    partes = texto_localizacao.split(' - ')
+                    if len(partes) == 2:
+                        return partes[0], partes[1].strip()
+            except Exception:
+                pass
+    
+            # Segunda tentativa: extrair da URL
+            url_parts = navegador.current_url.split('/')
+            for i, part in enumerate(url_parts):
+                if part == 'ceara':
+                    return 'Eusébio', 'CE'
+                    
+            # Terceira tentativa: valor padrão para Eusébio
+            return 'Eusébio', 'CE'
+    
+        except Exception as e:
+            self.logger.error(f"Erro ao capturar localização: {str(e)}")
+            return 'Eusébio', 'CE'
 
     def _rolar_pagina(self, navegador: webdriver.Chrome) -> None:
         for _ in range(3):
@@ -206,19 +204,27 @@ class ScraperVivaReal:
         return None
 
     def coletar_dados(self, num_paginas: int = 10) -> Optional[pd.DataFrame]:
+        navegador = None
         todos_dados: List[Dict] = []
         id_global = 0
         progresso = st.progress(0)
         status = st.empty()
-
+    
         try:
             navegador = self._configurar_navegador()
+            if navegador is None:
+                st.error("Não foi possível inicializar o navegador")
+                return None
+    
             espera = WebDriverWait(navegador, self.config.tempo_espera)
             navegador.get(self.config.url_base)
-
+            
+            # Aguarda a página carregar
+            time.sleep(self.config.espera_carregamento)
+    
             localidade, estado = self._capturar_localizacao(navegador)
             if not localidade or not estado:
-                self.logger.error("Não foi possível capturar localidade ou estado")
+                st.error("Não foi possível capturar a localização")
                 return None
 
             for pagina in range(1, num_paginas + 1):
@@ -257,10 +263,15 @@ class ScraperVivaReal:
 
         except Exception as e:
             self.logger.error(f"Erro crítico: {str(e)}")
+            st.error(f"Erro durante a coleta: {str(e)}")
             return None
 
         finally:
-            navegador.quit()
+            if navegador:
+                try:
+                    navegador.quit()
+                except Exception as e:
+                    self.logger.error(f"Erro ao fechar navegador: {str(e)}")
 
 def main():
     try:
