@@ -59,11 +59,11 @@ class SupabaseManager:
         self.supabase = create_client(self.url, self.key)
 
     def limpar_tabela(self):
-        self.supabase.table('imoveisatual').delete().neq('id', 0).execute()
+        self.supabase.table('teste').delete().neq('id', 0).execute()
 
     def inserir_dados(self, df):
         # Primeiro, pegamos o maior ID atual na tabela
-        result = self.supabase.table('imoveisatual').select('id').order('id.desc').limit(1).execute()
+        result = self.supabase.table('teste').select('id').order('id.desc').limit(1).execute()
         ultimo_id = result.data[0]['id'] if result.data else 0
         
         # Ajustamos os IDs do novo dataframe
@@ -74,7 +74,7 @@ class SupabaseManager:
         
         # Agora inserimos os dados
         registros = df.to_dict('records')
-        self.supabase.table('imoveisatual').insert(registros).execute()
+        self.supabase.table('teste').insert(registros).execute()
 
 class ScraperVivaReal:
     def __init__(self, config: ConfiguracaoScraper):
@@ -103,6 +103,13 @@ class ScraperVivaReal:
             
             service = Service("/usr/bin/chromedriver")
             navegador = webdriver.Chrome(service=service, options=opcoes_chrome)
+
+            # Usando webdriver_manager para gerenciar o ChromeDriver automaticamente
+            #from webdriver_manager.chrome import ChromeDriverManager
+            #from selenium.webdriver.chrome.service import Service as ChromeService
+            
+            #service = ChromeService(ChromeDriverManager().install())
+            #navegador = webdriver.Chrome(service=service, options=opcoes_chrome)
             navegador.execute_cdp_cmd('Network.setUserAgentOverride', {
                 "userAgent": 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             })
@@ -368,6 +375,28 @@ def main():
             <p style='font-size: 1.2em; color: #666;'>
                 Coleta de dados de terrenos à venda em Eusébio, Ceará
             </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Botão para o Looker Studio
+        st.markdown("""
+        <div style='text-align: center; padding: 1rem 0;'>
+            <a href='https://lookerstudio.google.com/reporting/105d6f24-d91f-4953-875c-3d4cc45a8fda' target='_blank'>
+                <button style='
+                    background-color: #FF4B4B;
+                    color: white;
+                    padding: 12px 24px;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 18px;
+                    cursor: pointer;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                    transition: all 0.3s ease;
+                    margin: 10px 0;
+                '>
+                    📊 Acessar Dashboard no Looker Studio
+                </button>
+            </a>
         </div>
         """, unsafe_allow_html=True)
         
